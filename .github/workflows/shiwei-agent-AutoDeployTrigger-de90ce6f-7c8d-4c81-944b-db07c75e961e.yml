@@ -7,7 +7,7 @@ on:
     branches: 
       [ agent-dev ]
     paths:
-    - '**'
+    - 'agent/**'
     - '.github/workflows/shiwei-agent-AutoDeployTrigger-de90ce6f-7c8d-4c81-944b-db07c75e961e.yml'
 
   # Allow manual trigger 
@@ -35,15 +35,13 @@ jobs:
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}/agent
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
+          _dockerfilePathKey_: Dockerfile
+          targetPort: 8000
           registryUrl: shiweiimage.azurecr.io
           registryUsername: ${{ secrets.SHIWEIAGENT_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.SHIWEIAGENT_REGISTRY_PASSWORD }}
           containerAppName: shiwei-agent
           resourceGroup: rg-mugglechen98-1429
           imageToBuild: shiweiimage.azurecr.io/shiwei-agent:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
 
 
