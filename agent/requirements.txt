@@ -7,3 +7,6 @@ pydantic>=2.10,<3
 python-dotenv>=1,<2
 httpx>=0.28,<1
 pytest>=8,<10
+requests
+azure-identity
+python-dotenv

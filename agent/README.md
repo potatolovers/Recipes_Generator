@@ -53,6 +53,27 @@ Every Studio run calls the real model and web search; `MOCK` does not apply. Wit
 in `.env`, runs stay on this machine. "Deserializing unregistered type app.schemas..." warnings in the
 terminal are expected.
 
+## Knowledge base data (M2)
+
+`kb/` downloads recipes and builds `kb/data/recipes.jsonl`, one recipe per line in the same shape for every
+source (`kb/record.py`). Standard library only. `kb/data/` is git-ignored: anyone can rebuild it.
+
+```powershell
+.\.venv\Scripts\python.exe -m kb.fetch               # all sources, then build; re-run to resume
+.\.venv\Scripts\python.exe -m kb.fetch themealdb     # only the named sources
+.\.venv\Scripts\python.exe -m kb.build               # re-parse what's downloaded, no network
+```
+
+| Source | What | License / terms |
+| --- | --- | --- |
+| `howtocook` | Chinese home recipes from GitHub, pinned to one commit | Unlicense (public domain) |
+| `themealdb` | International meals with measures; many link a YouTube video | Free key "1" for development and education only; supporter key before an app-store release |
+| `wikibooks` | English recipes from the Wikibooks Cookbook | CC BY-SA 4.0: credit the page; adaptations share alike |
+
+Raw downloads stay in `kb/data/raw/<source>/`, so a parser fix needs only `kb.build`. The build prints counts per
+source and which eval dishes have a recipe with the same title. Records with no ingredients or no steps are
+skipped. English titles for Chinese recipes (and the reverse) come in the next step.
+
 ## Layout (plan module → code)
 
 ```text
@@ -65,6 +86,7 @@ app/graph/synthesize.py   synthesize    structured output into Recipe
 app/graph/validate.py     validate      unit/citation/reference checks, allergen synonym list
 app/llm.py                —             ModelClient protocol + Azure client (vendor formats stay here)
 evals/                    evals/        dishes.json, run_eval.py
+kb/                       ingest/       recipe sources → kb/data/recipes.jsonl (M2)
 ```
 
 ## Behaviour to know

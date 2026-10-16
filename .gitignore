@@ -14,3 +14,5 @@ artifacts/
 backend/outputs/
 agent/outputs/
 **/.langgraph_api/
+# Knowledge-base downloads and build output; rebuild with: cd agent; python -m kb.fetch
+agent/kb/data/

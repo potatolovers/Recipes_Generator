@@ -20,6 +20,8 @@ V1 目标 2026-10-31；周目标及 DONE/WIP/TODO 统一维护在 [MILESTONES](M
 - [ ] 建 Foundry 项目并部署 mini/nano 模型；跑 app.smoke 与 10 个菜名，核对 web_search 引用和结构化输出。
 - [ ] Dockerfile、Container Apps 内部入口 + Key Vault、OpenTelemetry 追踪。
 - [ ] 跑 eval（20 道菜 + 8 条过敏/忌口 profile + 2 条非菜谱），记录 p50/p95 延迟、tokens、搜索次数与单次成本。
+- [x] M2 知识库数据：`agent/kb/` 抓取 HowToCook 372 + TheMealDB 790 + Wikibooks Cookbook 3,796 = 4,958 道（2026-10-15），输出 `agent/kb/data/recipes.jsonl`（git 忽略）；eval 23 道菜中同名 14、仅近似 7、无 2（番茄炒蛋待别名、Pesto pasta）。
+- [ ] M2 下一步：中英文标题/别名补全 → Azure AI Search 索引 → `kb_retrieve` + `grade` 节点 → eval 命中率。
 
 ## V1：两人 demo，功能与准确优先
 - [ ] W1.2：按[Agents API 评估](AGENTS_API_ASSESSMENT.md)先验证文本 → 图片 → 知识工具 → 契约/超时/取消；再注册可替换适配器与接 Android。评估已写，真实调用未做。
