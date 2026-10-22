@@ -1,6 +1,6 @@
 """Knowledge-base source parsers on small fixtures shaped like the real data. No network."""
 
-from kb import howtocook, themealdb, wikibooks
+from kb.sources import howtocook, themealdb, wikibooks
 
 TOMATO_EGG = """# 西红柿炒鸡蛋的做法
 

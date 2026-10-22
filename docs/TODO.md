@@ -20,8 +20,13 @@ V1 目标 2026-10-31；周目标及 DONE/WIP/TODO 统一维护在 [MILESTONES](M
 - [ ] 建 Foundry 项目并部署 mini/nano 模型；跑 app.smoke 与 10 个菜名，核对 web_search 引用和结构化输出。
 - [ ] Dockerfile、Container Apps 内部入口 + Key Vault、OpenTelemetry 追踪。
 - [ ] 跑 eval（20 道菜 + 8 条过敏/忌口 profile + 2 条非菜谱），记录 p50/p95 延迟、tokens、搜索次数与单次成本。
-- [x] M2 知识库数据：`agent/kb/` 抓取 HowToCook 372 + TheMealDB 790 + Wikibooks Cookbook 3,796 = 4,958 道（2026-10-15），输出 `agent/kb/data/recipes.jsonl`（git 忽略）；eval 23 道菜中同名 14、仅近似 7、无 2（番茄炒蛋待别名、Pesto pasta）。
-- [ ] M2 下一步：中英文标题/别名补全 → Azure AI Search 索引 → `kb_retrieve` + `grade` 节点 → eval 命中率。
+- [x] M2 知识库数据：`agent/kb/sources/` 抓取 HowToCook 372 + TheMealDB 790 + Wikibooks Cookbook 3,796 = 4,958 道（2026-10-15），输出 `agent/kb/data/recipes.jsonl`（git 忽略）；eval 23 道菜中同名 14、仅近似 7、无 2（番茄炒蛋待别名、Pesto pasta）。
+- [x] M2 中英文名/别名：3,630 道有模型给出的名称（`kb/data/names.jsonl`，git 忽略，需备份）；命名脚本已按决定移除，其余 1,328 道只保留原标题。eval 23 道菜中同名 21（含 1 个错误别名匹配）。
+- [x] M2 索引：`app/search.py`（REST 客户端）+ `kb/upload.py` / `kb/query.py`；AI Search（Free）索引 `recipes-v1` 已上传全部 4,958 道。
+- [x] M2 烹饪方法：`kb/cooking.py` 固定 75 种中西技法（9 大类）；`kb/methods.py` 用轻量模型（`AGENT_MODEL_LIGHTWEIGHT` = gpt-4.1-mini，全量约 $0.63）标注主方法与全部方法，索引新增可过滤字段 `cooking_method` / `cooking_methods` / `cooking_family`；4,918 道已标注，另 40 道因同批一道菜被 Azure 内容过滤拒绝而未标注（`kb.methods` 现会拆批隔离被拒的菜，重跑后需 `kb.upload --recreate`）。
+- [x] M2 双向量：`name_vector`（全部名称+主方法中英文）与 `content_vector`（全部方法+完整食材行+步骤首尾各 600 字）；`app/search.py` 的 `hybrid()` 可选关键词/任一向量组合；修复食材行“名称：用量”被当作分组标签删掉的问题；已 `--recreate` 重建；嵌入按 20,000 字节分批，避免超出部署的每分钟 token 限额。
+- [ ] M2 检索评测：`evals/retrieval_cases.json`（29 道菜 61 条查询：名称 / 方法区分 / 描述）+ `evals/run_retrieval_eval.py`，比较 7 种组合的 hit@1、hit@3、MRR，结果存 `agent/outputs/`；待运行，按结果决定 agent 用哪种组合。
+- [ ] M2 下一步：`kb_retrieve` + `grade` 节点 → eval 命中率。
 
 ## V1：两人 demo，功能与准确优先
 - [ ] W1.2：按[Agents API 评估](AGENTS_API_ASSESSMENT.md)先验证文本 → 图片 → 知识工具 → 契约/超时/取消；再注册可替换适配器与接 Android。评估已写，真实调用未做。

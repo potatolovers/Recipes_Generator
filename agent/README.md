@@ -55,24 +55,61 @@ terminal are expected.
 
 ## Knowledge base data (M2)
 
-`kb/` downloads recipes and builds `kb/data/recipes.jsonl`, one recipe per line in the same shape for every
-source (`kb/record.py`). Standard library only. `kb/data/` is git-ignored: anyone can rebuild it.
+`kb/` holds the recipe knowledge base: `kb/data/recipes.jsonl` (4,958 recipes, one per line, same shape for
+every source, see `kb/sources/record.py`) goes into an Azure AI Search index. `kb/data/` is git-ignored.
 
 ```powershell
-.\.venv\Scripts\python.exe -m kb.fetch               # all sources, then build; re-run to resume
-.\.venv\Scripts\python.exe -m kb.fetch themealdb     # only the named sources
-.\.venv\Scripts\python.exe -m kb.build               # re-parse what's downloaded, no network
+.\.venv\Scripts\python.exe -m kb.methods            # label cooking methods with the model; --limit N, --redo
+.\.venv\Scripts\python.exe -m kb.build              # raw downloads → recipes.jsonl, merging saved names + methods
+.\.venv\Scripts\python.exe -m kb.upload             # recipes → Azure AI Search index (recipes-v1); --recreate, --limit
+.\.venv\Scripts\python.exe -m kb.query 番茄炒蛋       # top 3 hybrid matches, with the read-only query key
+.\.venv\Scripts\python.exe -m kb.query beef --method stew   # filter by main cooking method (or --family)
+.\.venv\Scripts\python.exe -m evals.run_retrieval_eval      # score keyword / vector combinations: hit@1, hit@3, MRR
+.\.venv\Scripts\python.exe -m kb.sources.fetch      # only to rebuild from scratch: download all sources again
 ```
 
-| Source | What | License / terms |
+`kb.upload` needs `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_ADMIN_KEY` and `AGENT_MODEL_EMBED` in `.env` (see
+`.env.example`); the admin key never goes to the Container App. Each recipe is one search document: its names
+are searchable by keyword (`title`, `title_en` with an English analyzer, `title_zh` with a Chinese one,
+`aliases`), and two 512-number vectors (text-embedding-3-small) are searchable by meaning:
+
+| Vector | Text it is made from | Good for |
+| --- | --- | --- |
+| `name_vector` | every name and alias, then the main cooking method in Chinese and English | dish-name queries |
+| `content_vector` | all cooking methods, every ingredient line as written, steps (first and last 600 characters when longer than 1,200) | what the dish is: ingredients, technique, described dishes |
+
+Embedding both costs under $0.05 for all recipes (about 1.2M tokens). Ingredients, steps and notes are also stored for the agent to
+read. Each vector adds about 11 MB; the index is about 32 MB of the free tier's 50 MB. Re-running replaces
+recipes by id, but replaced copies count toward the 50 MB until Azure cleans them up, so after a schema change
+use `--recreate` (the index is empty for the few minutes the upload takes).
+
+`evals/retrieval_cases.json` lists 61 queries (dish names in both languages, method pairs such as 清蒸鱼 / 红烧鱼,
+and dishes described instead of named) with the recipe ids that count as right. `evals.run_retrieval_eval`
+asks the index each query seven ways (keyword only, each vector, and combinations) with the read-only query
+key and prints hit@1, hit@3 and MRR per combination, then the misses of the best one. One embedding call; search
+queries on the free tier are free.
+
+English/Chinese names and alternate names come from `kb/data/names.jsonl`: model answers for 3,630 recipes from
+an earlier naming step, since removed. `kb.build` merges them and leaves out alternate names that were given to
+3+ different recipes (categories such as "beef stew", not names). The other 1,328 recipes keep only their own
+title. Back up `names.jsonl`: it can't be regenerated without that step.
+
+Cooking methods use the fixed list in `kb/cooking.py`: 75 Chinese and Western techniques (炒, 爆, 熘, 红烧, 卤,
+白灼, 拔丝, sous vide, confit, gratin…) in 9 families. `kb.methods` asks the lightweight model (`AGENT_MODEL_LIGHTWEIGHT`, e.g.
+gpt-4.1-mini; default `AGENT_MODEL_CLASSIFY`) for each recipe's main method and every method its steps use, 40 recipes per call;
+answers outside the list are rejected. About $0.63 on gpt-4.1-mini for all recipes; answers
+are saved in `kb/data/methods.jsonl`, so it resumes and later runs only label new recipes. The index gets
+`cooking_method`, `cooking_methods` and `cooking_family`, all filterable and facetable, not searched.
+
+| Source (`kb/sources/`) | What | License / terms |
 | --- | --- | --- |
 | `howtocook` | Chinese home recipes from GitHub, pinned to one commit | Unlicense (public domain) |
-| `themealdb` | International meals with measures; many link a YouTube video | Free key "1" for development and education only; supporter key before an app-store release |
+| `themealdb` | International meals with measures; many link a YouTube video | Free key "1" for development and education only; supporter key before an app-store release; don't republish the data (this repo is public) |
 | `wikibooks` | English recipes from the Wikibooks Cookbook | CC BY-SA 4.0: credit the page; adaptations share alike |
 
 Raw downloads stay in `kb/data/raw/<source>/`, so a parser fix needs only `kb.build`. The build prints counts per
-source and which eval dishes have a recipe with the same title. Records with no ingredients or no steps are
-skipped. English titles for Chinese recipes (and the reverse) come in the next step.
+source and which eval dishes have a recipe with the same name. Records with no ingredients or no steps are
+skipped.
 
 ## Layout (plan module → code)
 
@@ -85,8 +122,8 @@ app/graph/web_research.py web_research  Responses API web_search → cited notes
 app/graph/synthesize.py   synthesize    structured output into Recipe
 app/graph/validate.py     validate      unit/citation/reference checks, allergen synonym list
 app/llm.py                —             ModelClient protocol + Azure client (vendor formats stay here)
-evals/                    evals/        dishes.json, run_eval.py
-kb/                       ingest/       recipe sources → kb/data/recipes.jsonl (M2)
+evals/                    evals/        dishes.json, run_eval.py; retrieval_cases.json, run_retrieval_eval.py
+kb/                       ingest/       recipes.jsonl → search index (M2); kb/sources/ downloads + parsers
 ```
 
 ## Behaviour to know

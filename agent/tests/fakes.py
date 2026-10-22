@@ -46,7 +46,7 @@ class ScriptedModelClient:
             parsed = self.recipes.pop(0) if len(self.recipes) > 1 else self.recipes[0]
         return ModelReply(parsed=parsed, text=parsed.model_dump_json(), input_tokens=100, output_tokens=50)
 
-    def search(self, system, user) -> ModelReply:
+    def search(self, role, system, user) -> ModelReply:
         self.calls.append("search")
         sources = [Source(id=f"s{n}", kind="web", title=f"Scripted source {n}", url=f"https://example.com/{n}")
                    for n in (1, 2)]

@@ -10,8 +10,8 @@ import string
 from collections.abc import Iterator
 from pathlib import Path
 
-from kb.net import get_json
-from kb.record import KBRecipe
+from kb.sources.net import get_json
+from kb.sources.record import KBRecipe
 
 NAME = "themealdb"
 API = "https://www.themealdb.com/api/json/v1/1"

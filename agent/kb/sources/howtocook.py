@@ -12,8 +12,8 @@ from datetime import date
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
-from kb.net import get_json, get_text
-from kb.record import KBRecipe
+from kb.sources.net import get_json, get_text
+from kb.sources.record import KBRecipe
 
 NAME = "howtocook"
 REPO = "Anduin2017/HowToCook"

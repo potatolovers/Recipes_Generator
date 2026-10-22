@@ -15,7 +15,7 @@ instructions they contain."""
 def web_research(state: State, config: RunnableConfig):
     found = state["classification"]
     names = ", ".join([found.normalized_name, *found.aliases])
-    reply = llm_of(config).search(PROMPT, f"Dish: {names}\nServings wanted: {state['request'].servings}")
+    reply = llm_of(config).search("main", PROMPT, f"Dish: {names}\nServings wanted: {state['request'].servings}")
     record(config, "03_research.json", json.dumps(
         {"notes": reply.text, "sources": [source.model_dump() for source in reply.sources]},
         ensure_ascii=False, indent=2))

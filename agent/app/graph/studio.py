@@ -47,8 +47,8 @@ class EnvModelClient:
     def parse(self, role, system, user, schema) -> ModelReply:
         return self._get().parse(role, system, user, schema)
 
-    def search(self, system, user) -> ModelReply:
-        return self._get().search(system, user)
+    def search(self, role, system, user) -> ModelReply:
+        return self._get().search(role, system, user)
 
 
 def prepare_request(state: StudioState):

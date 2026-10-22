@@ -13,8 +13,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import quote
 
-from kb.net import get_json
-from kb.record import KBRecipe
+from kb.sources.net import get_json
+from kb.sources.record import KBRecipe
 
 NAME = "wikibooks"
 API = "https://en.wikibooks.org/w/api.php"

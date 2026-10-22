@@ -6,7 +6,7 @@ from app.llm import AzureModelClient
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
-reply = AzureModelClient().search("Answer briefly and cite your sources.", "tomato egg stir-fry recipe")
+reply = AzureModelClient().search("main", "Answer briefly and cite your sources.", "tomato egg stir-fry recipe")
 print(reply.text)
 for source in reply.sources:
     print(f"[{source.id}] {source.title} — {source.url}")

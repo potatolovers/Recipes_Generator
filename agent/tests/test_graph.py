@@ -60,7 +60,7 @@ def test_wrong_servings_and_unknown_source_fail_validation():
 
 def test_model_failure_becomes_failed_response():
     class Broken(ScriptedModelClient):
-        def search(self, system, user):
+        def search(self, role, system, user):
             time.sleep(0.05)
             raise ModelFailure("MODEL_TIMEOUT", "The model request timed out.")
 
