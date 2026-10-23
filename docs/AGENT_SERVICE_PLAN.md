@@ -119,7 +119,7 @@ Freeze this before M1 code. It is a slim subset of the repo's W1.1 contract, ver
   "schema_version": "0.1",
   "request_id": "7c1e9a52-3f0b-4d61-9a77-2b8c0e4f5d10",
   "user_id": "anon-5f2c81",
-  "input": { "type": "dish_name", "value": "番茄炒蛋" },
+  "input": { "type": "dish_name", "value": "Tomato and egg stir-fry" },
   "servings": 2,
   "profile": { "allergies": ["peanut"], "diet": [], "dislikes": ["cilantro"] },
   "locale": "en-US"
@@ -155,6 +155,8 @@ Freeze this before M1 code. It is a slim subset of the repo's W1.1 contract, ver
   "error": null
 }
 ```
+
+`sources[].kind` is `web` (a page found by web search) or `kb` (a recipe from the agent's knowledge base, M2; `url` is its original page and `title` names the site). Progress events over SSE name the graph nodes: `classify`, `kb_retrieve`, `grade`, `web_research`, `synthesize`, `validate`; `grade` and `web_research` run only when needed.
 
 A non-food input such as "how do I fix my car" returns `"status": "rejected"`, `"recipe": null` and `"error": { "code": "NOT_A_RECIPE" }`, without any web search. The `usage` numbers above are placeholders until M1 measures real ones.
 

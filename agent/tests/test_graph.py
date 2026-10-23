@@ -15,15 +15,16 @@ def test_success_is_schema_valid_and_records_trace():
     assert response.classification.model_dump() == {"type": "dish", "normalized_name": "Tomato and egg stir-fry"}
     assert response.recipe.ingredients[0].source_ids == ["s1", "s2"]
     assert response.usage.search_requests == 1 and response.usage.input_tokens == 300
-    assert list(response.usage.step_latency_ms) == ["classify", "web_research", "synthesize", "validate"]
-    assert list(records) == ["01_request.json", "02_classify.json", "03_research.json",
-                             "04_synthesize_1.json", "05_response.json"]
+    # No knowledge base passed: kb_retrieve finds nothing and the request goes to web search, as in M1.
+    assert list(response.usage.step_latency_ms) == ["classify", "kb_retrieve", "web_research", "synthesize", "validate"]
+    assert list(records) == ["01_request.json", "02_classify.json", "05_research.json",
+                             "06_synthesize_1.json", "07_response.json"]
 
 
 def test_progress_events_follow_node_order():
     events = list(stream_generate(make_request(), ScriptedModelClient(DISH, [example_recipe()])))
     assert [payload for event, payload in events if event == "progress"] == [
-        "classify", "web_research", "synthesize", "validate"]
+        "classify", "kb_retrieve", "web_research", "synthesize", "validate"]
     assert events[-1][0] == "result"
 
 
@@ -37,14 +38,14 @@ def test_non_food_is_rejected_without_search():
 
 def test_allergen_draft_is_repaired_once():
     llm = ScriptedModelClient(DISH, [with_peanuts(), example_recipe()])
-    response = generate(make_request("宫保鸡丁", allergies=["peanut"]), llm)
+    response = generate(make_request("Kung pao chicken", allergies=["peanut"]), llm)
     assert response.status == "succeeded" and llm.calls.count("Recipe") == 2
     assert response.recipe.warnings[-1].startswith("Checked against your allergies: no peanut ingredients.")
 
 
 def test_retry_cap_fails_instead_of_returning_allergen():
     llm = ScriptedModelClient(DISH, [with_peanuts()])
-    response = generate(make_request("宫保鸡丁", allergies=["Peanut"]), llm)
+    response = generate(make_request("Kung pao chicken", allergies=["Peanut"]), llm)
     assert response.status == "failed" and response.error.code == "VALIDATION_FAILED"
     assert response.recipe is None and llm.calls.count("Recipe") == 2
 
@@ -67,7 +68,7 @@ def test_model_failure_becomes_failed_response():
     response = generate(make_request(), Broken(DISH, [example_recipe()]))
     assert response.status == "failed" and response.error.code == "MODEL_TIMEOUT"
     assert response.classification.type == "dish" and response.recipe is None
-    assert list(response.usage.step_latency_ms) == ["classify", "web_research"]
+    assert list(response.usage.step_latency_ms) == ["classify", "kb_retrieve", "web_research"]
     assert response.usage.step_latency_ms["web_research"] >= 40  # slept 50 ms; Windows timers run a little short
 
 

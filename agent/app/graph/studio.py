@@ -3,7 +3,8 @@
 Same nodes and edges as the API graph, plus a first node that turns Studio's input form
 (dish, servings, allergies, dislikes) into the contract's GenerateRequest. Studio can't pass a
 model client in config the way the API and CLI do, so this graph builds one from agent/.env on the
-first model call. Only `langgraph dev` imports this file; the API and tests don't.
+first model call, and the knowledge-base search client from the same file (skipped when not set).
+Only `langgraph dev` imports this file; the API and tests don't.
 """
 
 from uuid import uuid4
@@ -15,6 +16,7 @@ from app.graph import add_recipe_nodes
 from app.graph.state import State
 from app.llm import AzureModelClient, ModelReply
 from app.schemas import GenerateRequest, Profile, RecipeInput
+from app.search import optional_search
 
 
 class StudioInput(BaseModel):
@@ -50,6 +52,9 @@ class EnvModelClient:
     def search(self, role, system, user) -> ModelReply:
         return self._get().search(role, system, user)
 
+    def embed(self, texts):
+        return self._get().embed(texts)
+
 
 def prepare_request(state: StudioState):
     request = GenerateRequest(
@@ -65,4 +70,5 @@ builder = StateGraph(StudioState, input_schema=StudioInput)
 builder.add_node("prepare_request", prepare_request)
 builder.add_edge(START, "prepare_request")
 add_recipe_nodes(builder, after="prepare_request")
-graph = builder.compile(name="recipe_agent").with_config({"configurable": {"llm": EnvModelClient()}})
+graph = builder.compile(name="recipe_agent").with_config(
+    {"configurable": {"llm": EnvModelClient(), "kb": optional_search()}})

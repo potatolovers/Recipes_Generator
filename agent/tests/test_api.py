@@ -53,7 +53,7 @@ def test_mock_mode_returns_marked_example(client):
 def test_stream_sends_progress_then_result(client):
     text = client.post(URL, params={"stream": "true"}, json=BODY, headers=KEY).text
     events = [block.split("\n")[0] for block in text.strip().split("\n\n")]
-    assert events == ["event: progress"] * 4 + ["event: result"]
+    assert events == ["event: progress"] * 5 + ["event: result"]
     assert GenerateResponse.model_validate_json(text.strip().split("data: ")[-1]).status == "succeeded"
 
 
@@ -64,6 +64,7 @@ def test_bad_request_is_rejected_by_schema(client):
 def test_real_mode_runs_the_graph(client, monkeypatch):
     monkeypatch.setenv("MOCK", "0")
     monkeypatch.setattr(main, "get_llm", lambda: ScriptedModelClient(DISH, [example_recipe()]))
+    monkeypatch.setattr(main, "get_kb", lambda: None)  # never the real search service from .env
     parsed = GenerateResponse.model_validate(client.post(URL, json=BODY, headers=KEY).json())
     assert parsed.status == "succeeded" and parsed.sources[0].id == "s1"
 

@@ -1,6 +1,8 @@
 """M1 eval, run from agent/: python -m evals.run_eval
 
-Calls the real model and web search for every case, so it costs money. It checks status,
+Calls the real model, the recipe knowledge base when configured, and web search for cases the knowledge
+base doesn't answer, so it costs money. Each row records its route: "kb" (written from a knowledge-base
+recipe) or "web". It checks status,
 must-have ingredients, profile cases (allergens and dislikes absent from the ingredient list) and
 "no search on rejection"; step order and cost are not scored yet.
 """
@@ -56,17 +58,22 @@ def main():
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    from app.search import optional_search
+
     llm = AzureModelClient()
+    kb = optional_search()
+    print("knowledge base: " + ("on" if kb else "off (AZURE_SEARCH_ENDPOINT / AZURE_SEARCH_QUERY_KEY not set)"))
     rows = []
     for case in json.loads(CASES.read_text(encoding="utf-8")):
         request = GenerateRequest(request_id=str(uuid4()), user_id="eval",
                                   input=RecipeInput(type="dish_name", value=case["dish"]),
                                   profile=Profile(**case.get("profile", {})))
-        response = generate(request, llm)
+        response = generate(request, llm, kb=kb)
         problems = score(case, response)
-        rows.append({"case": label(case), "passed": not problems, "problems": problems,
+        route = "kb" if any(source.kind == "kb" for source in response.sources) else "web"
+        rows.append({"case": label(case), "passed": not problems, "problems": problems, "route": route,
                      "usage": response.usage.model_dump(), "response": response.model_dump()})
-        print(f"{'PASS' if not problems else 'FAIL'}  {label(case)}  {'; '.join(problems)}")
+        print(f"{'PASS' if not problems else 'FAIL'}  [{route}]  {label(case)}  {'; '.join(problems)}")
 
     latencies = [row["usage"]["latency_ms"] for row in rows]
     step_times: dict[str, list[int]] = {}
@@ -75,7 +82,10 @@ def main():
             step_times.setdefault(step, []).append(ms)
     summary = {
         "cases": len(rows), "passed": sum(row["passed"] for row in rows),
+        "answered_from_kb": sum(row["route"] == "kb" for row in rows),
         "latency_ms_p50": percentile(latencies, 0.5), "latency_ms_p95": percentile(latencies, 0.95),
+        "latency_ms_p50_by_route": {route: percentile([row["usage"]["latency_ms"] for row in rows if row["route"] == route], 0.5)
+                                    for route in sorted({row["route"] for row in rows})},
         **{f"total_{key}": sum(row["usage"][key] for row in rows)
            for key in ("input_tokens", "output_tokens", "search_requests")},
         "step_latency_ms_p50": {step: percentile(times, 0.5) for step, times in step_times.items()},

@@ -1,6 +1,6 @@
 """Tries dish names against the recipe index, the way the agent's kb_retrieve step will.
 
-Run from agent/ with the agent's venv: python -m kb.query 番茄炒蛋 "Beef stew"
+Run from agent/ with the agent's venv: python -m kb.query "Kung pao chicken" "Beef stew"
                                        python -m kb.query beef --method stew     only stews (filter)
 Uses the read-only query key (AZURE_SEARCH_QUERY_KEY), the same one the deployed agent gets.
 Each query is hybrid: keyword search on the names plus vector search on name_vector and content_vector,

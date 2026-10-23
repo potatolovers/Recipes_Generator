@@ -13,6 +13,7 @@ from app import AGENT_ROOT
 from app.graph import new_run_id, stream_generate
 from app.llm import AzureModelClient, ModelFailure
 from app.schemas import ErrorInfo, GenerateRequest, GenerateResponse
+from app.search import AzureSearch, optional_search
 
 app = FastAPI(title="拾味 Agent Service", version="0.1.0")
 
@@ -30,9 +31,15 @@ def get_llm() -> AzureModelClient:
     return AzureModelClient()
 
 
+@lru_cache
+def get_kb() -> AzureSearch | None:
+    """Recipe knowledge base with the read-only query key; None (web search only) until it's configured."""
+    return optional_search()
+
+
 def mock_events() -> Iterator[tuple[str, object]]:
     """MOCK=1: the fixed example response, so the backend can integrate before any model exists."""
-    for node in ("classify", "web_research", "synthesize", "validate"):
+    for node in ("classify", "kb_retrieve", "web_research", "synthesize", "validate"):
         yield "progress", node
     response = GenerateResponse.model_validate_json(
         (AGENT_ROOT / "examples" / "response_succeeded.json").read_text(encoding="utf-8"))
@@ -45,7 +52,7 @@ def run_events(body: GenerateRequest) -> Iterator[tuple[str, object]]:
     if os.getenv("MOCK") == "1":
         return mock_events()
     try:
-        return stream_generate(body, get_llm())
+        return stream_generate(body, get_llm(), kb=get_kb())
     except ModelFailure as exc:
         failed = GenerateResponse(run_id=new_run_id(), status="failed",
                                   error=ErrorInfo(code=exc.code, message=exc.message))

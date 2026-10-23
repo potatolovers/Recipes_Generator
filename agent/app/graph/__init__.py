@@ -1,6 +1,8 @@
-"""M1 graph: classify → web_research → synthesize → validate, one repair retry.
+"""Graph: classify → kb_retrieve → grade → synthesize → validate, one repair retry.
 
-Later milestones add nodes between classify and synthesize without changing the API.
+kb_retrieve looks the dish up in the recipe knowledge base (M2). When grade finds a candidate that is the
+same dish, the recipe is written from it and web search is skipped; otherwise (no candidates, only
+variants, knowledge base not configured or unavailable) web_research runs before synthesize, as in M1.
 """
 
 import time
@@ -10,6 +12,8 @@ from uuid import uuid4
 from langgraph.graph import END, START, StateGraph
 
 from app.graph.classify import classify
+from app.graph.grade import grade
+from app.graph.kb_retrieve import kb_retrieve
 from app.graph.state import State
 from app.graph.synthesize import synthesize
 from app.graph.validate import validate
@@ -21,12 +25,16 @@ Trace = Callable[[str, str], None]
 
 
 def add_recipe_nodes(builder: StateGraph, after: str = START) -> None:
-    """Adds the M1 nodes and edges, entered from `after`. Shared by the API graph and app/graph/studio.py."""
-    for node in (classify, web_research, synthesize, validate):
+    """Adds the recipe nodes and edges, entered from `after`. Shared by the API graph and app/graph/studio.py."""
+    for node in (classify, kb_retrieve, grade, web_research, synthesize, validate):
         builder.add_node(node.__name__, node)
     builder.add_edge(after, "classify")
-    builder.add_conditional_edges("classify", lambda state: END if state.get("error") else "web_research",
-                                  ["web_research", END])
+    builder.add_conditional_edges("classify", lambda state: END if state.get("error") else "kb_retrieve",
+                                  ["kb_retrieve", END])
+    builder.add_conditional_edges("kb_retrieve", lambda state: "grade" if state.get("candidates") else "web_research",
+                                  ["grade", "web_research"])
+    builder.add_conditional_edges("grade", lambda state: "synthesize" if state.get("kb_match") else "web_research",
+                                  ["synthesize", "web_research"])
     builder.add_edge("web_research", "synthesize")
     builder.add_edge("synthesize", "validate")
     builder.add_conditional_edges(
@@ -47,9 +55,10 @@ def new_run_id() -> str:
     return f"run_{uuid4().hex[:12]}"
 
 
-def stream_generate(request: GenerateRequest, llm: ModelClient,
-                    trace: Trace | None = None) -> Iterator[tuple[str, object]]:
-    """Yields ("progress", node_name) per finished node, then ("result", GenerateResponse)."""
+def stream_generate(request: GenerateRequest, llm: ModelClient, trace: Trace | None = None,
+                    kb=None) -> Iterator[tuple[str, object]]:
+    """Yields ("progress", node_name) per finished node, then ("result", GenerateResponse).
+    kb: the recipe search client (app.search.optional_search()); None skips the knowledge base."""
     started = time.perf_counter()
     if trace:
         trace("01_request.json", request.model_dump_json(indent=2))
@@ -61,7 +70,7 @@ def stream_generate(request: GenerateRequest, llm: ModelClient,
         step_ms[running] = step_ms.get(running, 0) + round((time.perf_counter() - step_started) * 1000)
 
     try:
-        for mode, payload in GRAPH.stream(state, {"configurable": {"llm": llm, "trace": trace}},
+        for mode, payload in GRAPH.stream(state, {"configurable": {"llm": llm, "trace": trace, "kb": kb}},
                                           stream_mode=["tasks", "updates", "values"]):
             if mode == "values":
                 state = payload
@@ -96,11 +105,11 @@ def stream_generate(request: GenerateRequest, llm: ModelClient,
         error=error,
     )
     if trace:
-        trace("05_response.json", response.model_dump_json(indent=2))
+        trace("07_response.json", response.model_dump_json(indent=2))
     yield "result", response
 
 
-def generate(request: GenerateRequest, llm: ModelClient, trace: Trace | None = None) -> GenerateResponse:
-    for _, payload in stream_generate(request, llm, trace):
+def generate(request: GenerateRequest, llm: ModelClient, trace: Trace | None = None, kb=None) -> GenerateResponse:
+    for _, payload in stream_generate(request, llm, trace, kb):
         response = payload
     return response

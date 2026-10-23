@@ -11,6 +11,7 @@
 * **Goal**：把用户提供的烹饪帖子（包含文字/图片/视频）内容整理成可核对的菜名、食材用量和操作步骤。注：整体分为两种情况：1. 具备明确信息，可以从字幕/帖子介绍处获取信息；2. 不需要明确信息，需要集合AI 菜谱Knowledge base 以及 基于通过VLM模型分析的视频得到的菜名/ingredient/大致步骤 得到切实可行的菜名，食材用量和操作步骤。
 * **范围**：链接/文字/图片/视频提取与菜谱生成；缺失食材/用量/步骤可结合知识预估并标注。仅视频缺信息时，需考虑描述和明确关联的作者菜谱网站；补充来源后重新判断完整性。
 * **输出约定**：菜谱及预估/AI推荐说明统一英文；名称、预计烹饪时间、份数、对应食材/数量、每步操作及该步食材/数量；统一美制单位与°F。冲突展示来源/差异和有理由的“AI推荐”，不静默选择或平均。详见 [W1.1契约草案](docs/RECIPE_CONTRACT.md)。
+* **目标用户（2026-10-22）**：面向英语用户。测试用例按英语用户视角编写，功能按英语使用场景设计；中文仅用于内部测试。
 * **个性化边界**：V1只生成菜谱所需材料；V3再结合用户库存、健身/素食等类型调整菜谱。
 * **不做**：通用问答、医疗营养建议、绕过平台访问限制；超出范围提示“目前只支持整理烹饪内容，请提供菜谱材料”。第一阶段目标为AI 辅助菜谱生成。
 * **当前**：Android 界面与会话内手动添加；Python 固定示例、三接口、演示模型、可选 Ollama 适配器。两端尚未联通，未验证真实模型或抓取；视频自动抽帧/转写未实现。
@@ -39,7 +40,7 @@
 
 **Agent 接入方向**：优先验证 OpenAI Agents API（托管循环 + Python 工具/校验）；目前仅完成[技术评估](docs/AGENTS_API_ASSESSMENT.md)，未接入真实 API。图片、结构化菜谱、权限及会话取消须先验证。
 
-**Agent 服务（2026-10-05）**：Agent 服务的设计以 [AGENT\_SERVICE\_PLAN](docs/AGENT_SERVICE_PLAN.md) 为准（LangGraph + Azure，菜名输入起步，过敏信息随请求传入并由代码校验）。它与上面的 Agents API 方向、V1 输入范围和 V3 个性化边界的冲突尚未在本文件及 ARCHITECTURE/MILESTONES 统一，待定。已有独立 [agent/](agent/README.md) M0–M1 起步代码：契约 v0 与示例、FastAPI（/v1/recipes:generate 含 SSE、/healthz、X-Api-Key、MOCK=1）、四节点流程与一次修复重试、过敏原代码检查、CLI、20 题 eval 脚本。仅用固定回复验证（16 项测试）；未调用真实 Azure 模型或联网搜索，未部署，无追踪，未与 backend/Android 联通。
+**Agent 服务（2026-10-05）**：Agent 服务的设计以 [AGENT\_SERVICE\_PLAN](docs/AGENT_SERVICE_PLAN.md) 为准（LangGraph + Azure，菜名输入起步，过敏信息随请求传入并由代码校验）。它与上面的 Agents API 方向、V1 输入范围和 V3 个性化边界的冲突尚未在本文件及 ARCHITECTURE/MILESTONES 统一，待定。独立 [agent/](agent/README.md)：契约 v0、FastAPI（/v1/recipes:generate 含 SSE、/healthz、X-Api-Key、MOCK=1）、过敏原代码检查、CLI 与 eval 脚本。M1（菜名 → 网页搜索 → 菜谱）已部署到 Azure Container Apps。M2 菜谱知识库（4,958 道，Azure AI Search）已上传；流程改为先查知识库（kb_retrieve → grade），判定为同一道菜时只用该菜谱、跳过网页搜索，否则照旧网页搜索。知识库路线仅用模拟回复测试（62 项），尚未在真实服务上验证。无追踪，未与 backend/Android 联通。
 
 1. **密钥**：只放 Python 服务端环境变量；不进入 App、Git、日志。
 2. **工具**：主流程保留 PostExtractor → MediaPreparer → VlmRecipeAnalyzer；新增知识检索/外部补充能力，代码负责编排与校验，不让模型无限循环调用工具。Agent构建工具与实际VLM模型是不同选择，当前均未完成真实接入。

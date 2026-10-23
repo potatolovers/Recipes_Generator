@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "request_id": "7c1e9a52-3f0b-4d61-9a77-2b8c0e4f5d10",
   "user_id": "anon-5f2c81",
-  "input": { "type": "dish_name", "value": "番茄炒蛋" },
+  "input": { "type": "dish_name", "value": "Tomato and egg stir-fry" },
   "servings": 2,
   "profile": { "allergies": ["peanut"], "diet": [], "dislikes": ["cilantro"] },
   "locale": "en-US"

@@ -96,7 +96,7 @@ class Recipe(Contract):
 
 class Source(Contract):
     id: str
-    kind: Literal["web"]
+    kind: Literal["web", "kb"]  # kb: a recipe from the agent's knowledge base (url = its original page)
     title: str
     url: str
 

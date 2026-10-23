@@ -83,3 +83,12 @@ class AzureSearch:
         if filter:
             body["filter"] = filter
         return self._request("POST", f"/indexes/{self.index}/docs/search", body).get("value", [])
+
+
+def optional_search(timeout: float = 10.0) -> AzureSearch | None:
+    """The query-key client when AZURE_SEARCH_ENDPOINT and AZURE_SEARCH_QUERY_KEY are set, else None: the agent
+    then skips the knowledge base and uses web search only. A short timeout, since web search is the fallback."""
+    try:
+        return AzureSearch(http=httpx.Client(timeout=timeout))
+    except SearchFailure:
+        return None

@@ -25,8 +25,9 @@ V1 目标 2026-10-31；周目标及 DONE/WIP/TODO 统一维护在 [MILESTONES](M
 - [x] M2 索引：`app/search.py`（REST 客户端）+ `kb/upload.py` / `kb/query.py`；AI Search（Free）索引 `recipes-v1` 已上传全部 4,958 道。
 - [x] M2 烹饪方法：`kb/cooking.py` 固定 75 种中西技法（9 大类）；`kb/methods.py` 用轻量模型（`AGENT_MODEL_LIGHTWEIGHT` = gpt-4.1-mini，全量约 $0.63）标注主方法与全部方法，索引新增可过滤字段 `cooking_method` / `cooking_methods` / `cooking_family`；4,918 道已标注，另 40 道因同批一道菜被 Azure 内容过滤拒绝而未标注（`kb.methods` 现会拆批隔离被拒的菜，重跑后需 `kb.upload --recreate`）。
 - [x] M2 双向量：`name_vector`（全部名称+主方法中英文）与 `content_vector`（全部方法+完整食材行+步骤首尾各 600 字）；`app/search.py` 的 `hybrid()` 可选关键词/任一向量组合；修复食材行“名称：用量”被当作分组标签删掉的问题；已 `--recreate` 重建；嵌入按 20,000 字节分批，避免超出部署的每分钟 token 限额。
-- [ ] M2 检索评测：`evals/retrieval_cases.json`（29 道菜 61 条查询：名称 / 方法区分 / 描述）+ `evals/run_retrieval_eval.py`，比较 7 种组合的 hit@1、hit@3、MRR，结果存 `agent/outputs/`；待运行，按结果决定 agent 用哪种组合。
-- [ ] M2 下一步：`kb_retrieve` + `grade` 节点 → eval 命中率。
+- [x] M2 检索评测：`evals/retrieval_cases.json`（68 条英文查询：名称 41 / 同食材不同做法 12 / 描述 10 / 库中没有 5）+ `evals/run_retrieval_eval.py`，结果存 `agent/outputs/`。2026-10-22 英文版：仅 name_vector 最好（hit@1 0.89、hit@3 0.94；名称 41 条全部进前 3），加关键词或 content_vector 反而变差；描述类最好的是 content_vector（hit@1 0.70），HowToCook 的 content 文本是中文，英文描述匹配不上。建议（待确认）：菜名输入只用 name_vector。库中没有的菜前 3 都是相似菜（如 Lobster roll → Lobster Thermidor），需 grade 把关。
+- [x] M2 知识库优先：`kb_retrieve`（英文菜名 → name_vector，前 3）+ `grade`（轻量模型判 same / variant / different）；same 则只用该菜谱写作、跳过网页搜索（`sources[].kind = kb`）；无候选、仅变体、检索或评分失败时走网页搜索。已用模拟模型和模拟检索测试（62 项）。
+- [ ] M2 真实验证：Container App 加 `AZURE_SEARCH_ENDPOINT`、`AZURE_SEARCH_QUERY_KEY`（只读）、`AZURE_SEARCH_INDEX`、`AGENT_MODEL_EMBED`、`AGENT_MODEL_LIGHTWEIGHT`；本机跑 `python -m evals.run_eval` 看通过率、知识库命中数和两条路线的 p50 延迟。
 
 ## V1：两人 demo，功能与准确优先
 - [ ] W1.2：按[Agents API 评估](AGENTS_API_ASSESSMENT.md)先验证文本 → 图片 → 知识工具 → 契约/超时/取消；再注册可替换适配器与接 Android。评估已写，真实调用未做。

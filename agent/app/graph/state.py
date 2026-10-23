@@ -13,6 +13,8 @@ def add_usage(total: dict[str, int], delta: dict[str, int]) -> dict[str, int]:
 class State(TypedDict, total=False):
     request: GenerateRequest
     classification: ClassifyResult
+    candidates: list[dict]  # knowledge-base hits for the dish name, best first (kb_retrieve)
+    kb_match: str  # id of the candidate graded the same dish; the recipe is then written from it alone
     notes: str
     sources: list[Source]
     recipe: Recipe
@@ -24,6 +26,11 @@ class State(TypedDict, total=False):
 
 def llm_of(config: RunnableConfig) -> ModelClient:
     return config["configurable"]["llm"]
+
+
+def kb_of(config: RunnableConfig):
+    """The recipe search client (app.search.AzureSearch), or None when the knowledge base isn't configured."""
+    return config["configurable"].get("kb")
 
 
 def record(config: RunnableConfig, name: str, value: str) -> None:

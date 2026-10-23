@@ -1,11 +1,12 @@
-# Agent service (M0–M1 starter)
+# Agent service (M0–M2)
 
 Dish name → recipe JSON, built to [docs/AGENT_SERVICE_PLAN.md](../docs/AGENT_SERVICE_PLAN.md), which is the
 source of truth for this service. Separate from `backend/`; nothing calls it yet.
 
-**Status:** the API, graph, validation and allergen post-check are tested with scripted replies only (16 tests).
-The Azure client, the smoke script and the eval runner have never been run against a real deployment.
-Not started: Azure resources, Dockerfile/deploy, OpenTelemetry tracing, `traceparent`, cost per run.
+**Status:** M1 (dish name → web search → recipe) is deployed to Azure Container Apps. M2's recipe knowledge
+base is built and uploaded, and the graph now searches it before the web (`kb_retrieve` → `grade`); that route
+is tested with scripted replies and a fake search service only, not yet against the real services.
+Not started: OpenTelemetry tracing, `traceparent`, cost per run, profile memory.
 
 ## Run
 
@@ -30,7 +31,7 @@ For real runs, fill in the Foundry endpoint, key and two deployment names in `.e
 | Command | Plan item |
 | --- | --- |
 | `python -m app.smoke` | M0: one `web_search` call prints a cited answer |
-| `python -m app.cli "番茄炒蛋" "Caesar salad"` | Day 2: run dish names, save `01_request` → `05_response` under `outputs/` |
+| `python -m app.cli "Tomato and egg stir-fry" "Caesar salad"` | Run dish names, save `01_request` → `07_response` under `outputs/` (`03_kb_retrieve` / `04_grade` show the knowledge-base step) |
 | `python -m evals.run_eval` | Day 5: 20 dishes, 8 profile cases (allergies, dislikes), 2 non-food inputs; pass/fail, p50/p95 latency, tokens, searches |
 
 ## Visualize the graph (LangGraph Studio)
@@ -62,7 +63,7 @@ every source, see `kb/sources/record.py`) goes into an Azure AI Search index. `k
 .\.venv\Scripts\python.exe -m kb.methods            # label cooking methods with the model; --limit N, --redo
 .\.venv\Scripts\python.exe -m kb.build              # raw downloads → recipes.jsonl, merging saved names + methods
 .\.venv\Scripts\python.exe -m kb.upload             # recipes → Azure AI Search index (recipes-v1); --recreate, --limit
-.\.venv\Scripts\python.exe -m kb.query 番茄炒蛋       # top 3 hybrid matches, with the read-only query key
+.\.venv\Scripts\python.exe -m kb.query "Kung pao chicken"   # top 3 hybrid matches, with the read-only query key
 .\.venv\Scripts\python.exe -m kb.query beef --method stew   # filter by main cooking method (or --family)
 .\.venv\Scripts\python.exe -m evals.run_retrieval_eval      # score keyword / vector combinations: hit@1, hit@3, MRR
 .\.venv\Scripts\python.exe -m kb.sources.fetch      # only to rebuild from scratch: download all sources again
@@ -83,8 +84,10 @@ read. Each vector adds about 11 MB; the index is about 32 MB of the free tier's 
 recipes by id, but replaced copies count toward the 50 MB until Azure cleans them up, so after a schema change
 use `--recreate` (the index is empty for the few minutes the upload takes).
 
-`evals/retrieval_cases.json` lists 61 queries (dish names in both languages, method pairs such as 清蒸鱼 / 红烧鱼,
-and dishes described instead of named) with the recipe ids that count as right. `evals.run_retrieval_eval`
+`evals/retrieval_cases.json` lists 68 English queries, written as English-speaking users would type them: dish
+names (Western, international and Chinese dishes by their English names), the same food cooked another way
+(grilled vs poached salmon, fried vs scrambled eggs), dishes described instead of named, and 5 dishes the index
+doesn't have (Cobb salad, Crab rangoon…), with the recipe ids that count as right. `evals.run_retrieval_eval`
 asks the index each query seven ways (keyword only, each vector, and combinations) with the read-only query
 key and prints hit@1, hit@3 and MRR per combination, then the misses of the best one. One embedding call; search
 queries on the free tier are free.
@@ -118,10 +121,13 @@ app/schemas.py            schemas/      contract v0 models; examples/ holds requ
 app/api/main.py           api/          /v1/recipes:generate (?stream=true SSE), /healthz, X-Api-Key, MOCK=1
 app/graph/__init__.py     graph/        StateGraph wiring, retry cap, response assembly
 app/graph/classify.py     classify      reject non-dishes, normalize name, aliases
-app/graph/web_research.py web_research  Responses API web_search → cited notes
+app/graph/kb_retrieve.py  kb_retrieve   English dish name → name_vector search, top 3 (M2)
+app/graph/grade.py        grade         lightweight model: each candidate same / variant / different (M2)
+app/graph/web_research.py web_research  Responses API web_search → cited notes (when the knowledge base has no match)
 app/graph/synthesize.py   synthesize    structured output into Recipe
 app/graph/validate.py     validate      unit/citation/reference checks, allergen synonym list
 app/llm.py                —             ModelClient protocol + Azure client (vendor formats stay here)
+app/search.py             —             Azure AI Search REST client; optional_search() for the agent (query key)
 evals/                    evals/        dishes.json, run_eval.py; retrieval_cases.json, run_retrieval_eval.py
 kb/                       ingest/       recipes.jsonl → search index (M2); kb/sources/ downloads + parsers
 ```
@@ -133,6 +139,15 @@ kb/                       ingest/       recipes.jsonl → search index (M2); kb/
 - `validate` sends a failed draft back to `synthesize` once; a second failure returns `VALIDATION_FAILED`
   with `recipe: null` rather than an unchecked recipe.
 - Non-food input returns `NOT_A_RECIPE` after `classify`, before any search.
+- Knowledge base first: `kb_retrieve` embeds the English dish name and searches `name_vector` (top 3);
+  `grade` asks the lightweight model whether each candidate is the same dish, a variant or a different dish.
+  The first "same" becomes the only source (`sources[].kind` = `kb`, `url` = its original page, the title
+  credits the site, as Wikibooks' CC BY-SA requires) and web search is skipped. Otherwise `web_research` runs
+  as in M1. When search isn't configured, fails or times out (10 s), or the grader call fails, the request
+  continues with web search: the knowledge base never fails a request.
+- Container App settings for the knowledge base: `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_QUERY_KEY` (read-only;
+  never the admin key), `AZURE_SEARCH_INDEX`, `AGENT_MODEL_EMBED`, `AGENT_MODEL_LIGHTWEIGHT`. Without the first
+  two the service runs web-only, as before.
 - `usage.step_latency_ms` maps each node to the milliseconds it took (summed if it ran twice, and including a
   node that failed). It is an addition to the plan's v0 `usage` example.
 - The allergen check matches ingredient names against a short synonym list; it is a safety net, not a guarantee.
